@@ -129,11 +129,25 @@ const ExamInterface: React.FC = () => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleSelectAnswer = (questionId: number, answerId: number) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: [answerId] // Hiện tại chỉ hỗ trợ chọn 1 đáp án (Radio). Nếu Multicheck thì sẽ đổi logic.
-    }));
+  const handleSelectAnswer = (questionId: number, answerId: number, isMultiple: boolean = false) => {
+    setAnswers(prev => {
+      if (!isMultiple) {
+        return {
+          ...prev,
+          [questionId]: [answerId]
+        };
+      }
+      
+      const currentAnswers = prev[questionId] || [];
+      const newAnswers = currentAnswers.includes(answerId)
+        ? currentAnswers.filter(id => id !== answerId)
+        : [...currentAnswers, answerId];
+        
+      return {
+        ...prev,
+        [questionId]: newAnswers
+      };
+    });
   };
 
   if (loading) {
@@ -189,9 +203,20 @@ const ExamInterface: React.FC = () => {
                 </span>
               </div>
               
-              <div className="text-lg text-slate-700 leading-relaxed mb-8 font-medium">
+              <div className="text-lg text-slate-700 leading-relaxed mb-4 font-medium">
                 {currentQuestion.content}
               </div>
+              
+              {currentQuestion.isMultipleChoice && (
+                <div className="text-sm font-semibold text-indigo-600 mb-6 bg-indigo-50 inline-block px-3 py-1 rounded-md">
+                  Có thể chọn nhiều đáp án
+                </div>
+              )}
+              {!currentQuestion.isMultipleChoice && (
+                <div className="text-sm font-semibold text-slate-500 mb-6 bg-slate-100 inline-block px-3 py-1 rounded-md">
+                  Chọn 1 đáp án duy nhất
+                </div>
+              )}
               
               <div className="space-y-4 mb-auto">
                 {currentQuestion.answers?.map((answer) => {
@@ -208,16 +233,22 @@ const ExamInterface: React.FC = () => {
                     >
                       <div className="relative flex items-center justify-center mr-4">
                         <input
-                          type="radio"
-                          name={`question_${currentQuestion.examQuestionId}`}
+                          type={currentQuestion.isMultipleChoice ? "checkbox" : "radio"}
+                          name={`question_${currentQuestion.examQuestionId}${currentQuestion.isMultipleChoice ? '_' + answer.examAnswerId : ''}`}
                           checked={isSelected || false}
-                          onChange={() => handleSelectAnswer(currentQuestion.examQuestionId, answer.examAnswerId)}
+                          onChange={() => handleSelectAnswer(currentQuestion.examQuestionId, answer.examAnswerId, !!currentQuestion.isMultipleChoice)}
                           className="peer sr-only"
                         />
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          isSelected ? 'border-indigo-600' : 'border-slate-300'
+                        <div className={`w-5 h-5 border-2 flex items-center justify-center transition-colors ${
+                          currentQuestion.isMultipleChoice ? 'rounded-md' : 'rounded-full'
+                        } ${
+                          isSelected 
+                            ? (currentQuestion.isMultipleChoice ? 'border-indigo-600 bg-indigo-600' : 'border-indigo-600') 
+                            : (currentQuestion.isMultipleChoice ? 'border-slate-300 bg-white' : 'border-slate-300')
                         }`}>
-                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-in zoom-in duration-200" />}
+                          {isSelected && <div className={`w-2.5 h-2.5 animate-in zoom-in duration-200 ${
+                            currentQuestion.isMultipleChoice ? 'rounded-sm bg-white' : 'rounded-full bg-indigo-600'
+                          }`} />}
                         </div>
                       </div>
                       <span className={`text-base ${isSelected ? 'text-indigo-900 font-medium' : 'text-slate-700'}`}>

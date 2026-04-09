@@ -139,10 +139,16 @@ public class ExamSessionService {
                         .build());
             }
 
+            long correctCount = eq.getQuestion().getAnswers().stream()
+                    .filter(a -> a.getIsCorrect() != null && a.getIsCorrect())
+                    .count();
+            boolean isMultipleChoice = correctCount > 1;
+
             result.add(ExamQuestionResponseDTO.builder()
                     .examQuestionId(eq.getId())
                     .orderIndex(eq.getOrderIndex())
                     .content(eq.getQuestion().getContent())
+                    .isMultipleChoice(isMultipleChoice)
                     .answers(answerDTOs)
                     .build());
         }

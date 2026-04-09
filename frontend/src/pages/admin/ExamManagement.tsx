@@ -12,13 +12,15 @@ const ExamManagement: React.FC = () => {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
+    id: undefined,
     title: '',
     subjectId: '',
     duration: 60,
     totalQuestions: 10,
     startTime: '',
-    endTime: ''
+    endTime: '',
+    status: 'UPCOMING'
   });
 
   const fetchExams = async () => {
@@ -67,21 +69,60 @@ const ExamManagement: React.FC = () => {
     }
   };
 
+  const openCreateModal = () => {
+    setFormData({
+      id: undefined,
+      title: '',
+      subjectId: subjects.length > 0 ? subjects[0].id.toString() : '',
+      duration: 60,
+      totalQuestions: 10,
+      startTime: '',
+      endTime: '',
+      status: 'UPCOMING'
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (exam: any) => {
+    setFormData({
+      id: exam.id,
+      title: exam.title,
+      subjectId: exam.subjectId.toString(),
+      duration: exam.duration,
+      totalQuestions: exam.totalQuestions,
+      startTime: exam.startTime ? exam.startTime.substring(0, 16) : '',
+      endTime: exam.endTime ? exam.endTime.substring(0, 16) : '',
+      status: exam.status
+    });
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.subjectId) {
       toast.error('Vui lòng chọn môn học'); return;
     }
     try {
-      await adminApi.createExam({
-        ...formData,
-        subjectId: Number(formData.subjectId)
-      });
+      const payload = {
+        title: formData.title,
+        duration: formData.duration,
+        totalQuestions: formData.totalQuestions,
+        subjectId: Number(formData.subjectId),
+        startTime: formData.startTime || null,
+        endTime: formData.endTime || null
+      };
+
+      if (formData.id) {
+        await adminApi.updateExam(formData.id, payload);
+        toast.success('Cập nhật kỳ thi thành công!');
+      } else {
+        await adminApi.createExam(payload);
+        toast.success('Tạo kỳ thi thành công!');
+      }
       setIsModalOpen(false);
       fetchExams();
-      toast.success('Tạo kỳ thi thành công!');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Có lỗi khi tạo kỳ thi');
+      toast.error(error.response?.data?.message || 'Có lỗi khi lưu kỳ thi');
     }
   };
 
@@ -92,7 +133,7 @@ const ExamManagement: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-800">Quản lý Đợt thi</h1>
           <p className="text-slate-500 mt-1">Thiết lập cấu hình kỳ thi, thời gian và chỉ định thí sinh</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors shadow-sm">
+        <button onClick={openCreateModal} className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors shadow-sm">
           <Plus size={18} className="mr-2" /> Tạo kỳ thi
         </button>
       </div>
@@ -135,9 +176,14 @@ const ExamManagement: React.FC = () => {
                     >
                       <Users size={14} className="mr-1" /> Thí sinh
                     </Link>
-                    <button onClick={() => handleDelete(exam.id)} className="w-full flex items-center justify-center text-xs font-semibold py-1.5 px-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors">
-                      <Trash2 size={14} className="mr-1" /> Xóa thi
-                    </button>
+                    <div className="flex w-full space-x-2">
+                        <button disabled={exam.status !== 'UPCOMING'} onClick={() => handleEdit(exam)} className="flex-1 flex items-center justify-center text-xs font-semibold py-1.5 px-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                          <Edit size={14} className="mr-1" /> Sửa
+                        </button>
+                        <button disabled={exam.status !== 'UPCOMING'} onClick={() => handleDelete(exam.id)} className="flex-1 flex items-center justify-center text-xs font-semibold py-1.5 px-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                          <Trash2 size={14} className="mr-1" /> Xóa
+                        </button>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -151,7 +197,7 @@ const ExamManagement: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden ring-1 ring-slate-900/5">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
               <h3 className="font-bold text-lg text-slate-800 flex items-center">
-                <Calendar className="mr-2 text-indigo-600" /> Thêm đợt thi mới
+                <Calendar className="mr-2 text-indigo-600" /> {formData.id ? 'Chỉnh sửa đợt thi' : 'Thêm đợt thi mới'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
@@ -197,10 +243,24 @@ const ExamManagement: React.FC = () => {
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-                <div>
-                  {/* Start time / End time UI có thể map sau, tạm thời bỏ hoặc gửi nguyên */}
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Ghi chú thêm</label>
-                  <div className="text-xs text-slate-500 py-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Mở đề lúc</label>
+                    <input 
+                      type="datetime-local"
+                      value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Đóng đề lúc</label>
+                    <input 
+                      type="datetime-local"
+                      value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-2 text-xs text-slate-500">
                     Lịch mở đóng đề tự động hiện bỏ trống sẽ mở vô thời hạn (ONGOING).
                   </div>
                 </div>

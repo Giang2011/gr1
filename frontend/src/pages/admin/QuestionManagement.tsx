@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { adminApi } from '../../api/adminApi';
 import Swal from 'sweetalert2';
 import toast from 'react-hot-toast';
-import { Trash2, X, Plus, Filter, CheckCircle2 } from 'lucide-react';
+import { Trash2, X, Plus, Filter, CheckCircle2, Eye } from 'lucide-react';
 
 const QuestionManagement: React.FC = () => {
   const [questions, setQuestions] = useState<any[]>([]);
@@ -12,7 +12,7 @@ const QuestionManagement: React.FC = () => {
   // Lọc
   const [filterSubjectId, setFilterSubjectId] = useState<string>('');
 
-  // Modal
+  // Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<any>({
     content: '',
@@ -22,6 +22,10 @@ const QuestionManagement: React.FC = () => {
       { content: '', isCorrect: false }
     ]
   });
+
+  // View Modal
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedViewQuestion, setSelectedViewQuestion] = useState<any>(null);
 
   const fetchQuestions = async () => {
     try {
@@ -105,15 +109,15 @@ const QuestionManagement: React.FC = () => {
       const newAnswers = [...prev.answers];
       newAnswers[index] = { ...newAnswers[index], [field]: value };
       
-      // Nếu Radio (chỉ 1 câu đúng), update các câu khác thành false
-      if (field === 'isCorrect' && value === true) {
-        newAnswers.forEach((a, i) => {
-          if (i !== index) a.isCorrect = false;
-        });
-      }
+      // Hỗ trợ chọn nhiều đáp án bằng Checkbox thay vì Radio, nên không reset
       
       return { ...prev, answers: newAnswers };
     });
+  };
+
+  const openViewModal = (question: any) => {
+    setSelectedViewQuestion(question);
+    setIsViewModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -197,6 +201,9 @@ const QuestionManagement: React.FC = () => {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center justify-center space-x-3">
+                    <button onClick={() => openViewModal(q)} className="text-indigo-500 hover:text-indigo-700 transition-colors">
+                      <Eye size={18} />
+                    </button>
                     <button onClick={() => handleDelete(q.id)} className="text-red-500 hover:text-red-700 transition-colors">
                       <Trash2 size={18} />
                     </button>
@@ -251,9 +258,9 @@ const QuestionManagement: React.FC = () => {
                     <div key={idx} className={`flex items-start gap-3 p-3 rounded-xl border ${ans.isCorrect ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                       <div className="pt-2 pl-2">
                         <input 
-                          type="radio" name="correctAnswer" checked={ans.isCorrect}
-                          onChange={() => handleAnswerChange(idx, 'isCorrect', true)}
-                          className="w-5 h-5 text-emerald-600 focus:ring-emerald-500" 
+                          type="checkbox" checked={ans.isCorrect}
+                          onChange={(e) => handleAnswerChange(idx, 'isCorrect', e.target.checked)}
+                          className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500" 
                         />
                       </div>
                       <input 
@@ -268,7 +275,7 @@ const QuestionManagement: React.FC = () => {
                   ))}
                 </div>
                 <p className="text-xs text-slate-500 mt-3 font-medium flex items-center">
-                  <CheckCircle2 size={14} className="mr-1 text-emerald-500" /> Hãy chọn vào ô tròn ở đáp án đúng nhất.
+                  <CheckCircle2 size={14} className="mr-1 text-emerald-500" /> Hãy đánh dấu checkbox vào một hoặc nhiều phần tử tương ứng với đáp án đúng.
                 </p>
               </div>
             </form>
@@ -276,6 +283,66 @@ const QuestionManagement: React.FC = () => {
             <div className="flex justify-end space-x-3 px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
               <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-slate-600 hover:bg-slate-200 font-medium rounded-xl transition-colors">Hủy</button>
               <button onClick={handleSubmit} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors shadow-sm">Tạo câu hỏi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Modal */}
+      {isViewModalOpen && selectedViewQuestion && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden ring-1 ring-slate-900/5">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+              <h3 className="font-bold text-lg text-slate-800">Chi tiết câu hỏi #{selectedViewQuestion.id}</h3>
+              <button onClick={() => setIsViewModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Chuyên môn</h4>
+                <div className="bg-indigo-50 text-indigo-700 inline-flex px-3 py-1.5 rounded-lg text-sm font-medium">
+                  {selectedViewQuestion.subjectName || `Subject #${selectedViewQuestion.subjectId}`}
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Nội dung câu hỏi</h4>
+                <div className="text-base text-slate-800 font-medium p-4 bg-slate-50 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                  {selectedViewQuestion.content}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Danh sách đáp án</h4>
+                <div className="space-y-3">
+                  {selectedViewQuestion.answers?.map((ans: any, idx: number) => (
+                    <div 
+                      key={ans.id || idx} 
+                      className={`flex items-start p-4 rounded-xl border ${ans.isCorrect ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white'}`}
+                    >
+                      <div className="mr-3 mt-0.5">
+                        {ans.isCorrect ? (
+                          <CheckCircle2 size={20} className="text-emerald-500" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-300"></div>
+                        )}
+                      </div>
+                      <div className={`flex-1 text-base ${ans.isCorrect ? 'text-emerald-900 font-semibold' : 'text-slate-700 font-medium'}`}>
+                        {ans.content}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end px-6 py-4 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+              <button 
+                onClick={() => setIsViewModalOpen(false)} 
+                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl transition-colors shadow-sm"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

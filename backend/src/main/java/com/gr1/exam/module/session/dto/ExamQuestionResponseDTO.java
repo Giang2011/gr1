@@ -15,6 +15,7 @@ public class ExamQuestionResponseDTO {
     private Integer examQuestionId;
     private Integer orderIndex;
     private String content;
+    private Boolean isMultipleChoice;
     private List<ShuffledAnswerDTO> answers;
 
     @Data

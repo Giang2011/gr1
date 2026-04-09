@@ -35,6 +35,7 @@ export interface ExamQuestionResponseDTO {
   examQuestionId: number;
   orderIndex: number;
   content: string;
+  isMultipleChoice?: boolean;
   answers: ShuffledAnswerDTO[];
 }
 
