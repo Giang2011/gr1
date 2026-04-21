@@ -39,20 +39,43 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Authentication endpoints — Public
-                .requestMatchers("/auth/**").permitAll()
+                // Authentication — Chỉ login (không có register)
+                .requestMatchers("/auth/login").permitAll()
+
                 // Swagger / OpenAPI endpoints — Public
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                // Subjects — GET public, others ADMIN
-                .requestMatchers(HttpMethod.GET, "/subjects/**").permitAll()
-                .requestMatchers("/subjects/**").hasRole("ADMIN")
-                // Questions — ADMIN only
-                .requestMatchers("/questions/**").hasRole("ADMIN")
-                // Exams — GET public, write + participants ADMIN
+
+                // Uploads — Public (serve static files)
+                .requestMatchers("/uploads/**").permitAll()
+
+                // Tạo student — ADMIN/TEACHER
+                .requestMatchers(HttpMethod.POST, "/users/students").hasAnyRole("ADMIN", "TEACHER")
+                // Tạo teacher — ADMIN only
+                .requestMatchers(HttpMethod.POST, "/users/teachers").hasRole("ADMIN")
+                // Teacher tự cập nhật — ADMIN/TEACHER
+                .requestMatchers(HttpMethod.PUT, "/users/me").hasAnyRole("ADMIN", "TEACHER")
+                // Sửa/xóa user — ADMIN only
+                .requestMatchers(HttpMethod.PUT, "/users/{id}").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/users/{id}").hasRole("ADMIN")
+                // Xem danh sách — ADMIN/TEACHER
+                .requestMatchers(HttpMethod.GET, "/users/**").hasAnyRole("ADMIN", "TEACHER")
+
+                // Subjects & Chapters — ADMIN/TEACHER
+                .requestMatchers("/subjects/**").hasAnyRole("ADMIN", "TEACHER")
+
+                // Questions — ADMIN/TEACHER
+                .requestMatchers("/questions/**").hasAnyRole("ADMIN", "TEACHER")
+
+                // Exams — GET authenticated (Student xem kỳ thi được tham gia), write ADMIN/TEACHER
                 .requestMatchers(HttpMethod.GET, "/exams/**").authenticated()
-                .requestMatchers("/exams/**").hasRole("ADMIN")
-                // User management — ADMIN only
-                .requestMatchers("/users/**").hasRole("ADMIN")
+                .requestMatchers("/exams/**").hasAnyRole("ADMIN", "TEACHER")
+
+                // Sessions — STUDENT
+                .requestMatchers("/sessions/**").hasRole("STUDENT")
+
+                // Results — authenticated (logic phân quyền chi tiết trong service/controller)
+                .requestMatchers("/results/**").authenticated()
+
                 // Mọi request khác cần xác thực
                 .anyRequest().authenticated()
             )

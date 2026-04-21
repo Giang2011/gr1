@@ -2,10 +2,11 @@ package com.gr1.exam.module.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gr1.exam.core.exception.GlobalExceptionHandler;
+import com.gr1.exam.module.user.dto.CreateStudentResponseDTO;
 import com.gr1.exam.module.user.dto.LoginResponseDTO;
-import com.gr1.exam.module.user.dto.UserRequestDTO;
 import com.gr1.exam.module.user.dto.UserResponseDTO;
 import com.gr1.exam.module.user.service.UserService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -50,38 +53,9 @@ class UserControllerTest {
                 .build();
     }
 
-    @Test
-    void register_shouldReturnCreated() throws Exception {
-        UserRequestDTO request = new UserRequestDTO();
-        request.setName("alice");
-        request.setPassword("password123");
-        request.setRole("STUDENT");
-
-        UserResponseDTO response = UserResponseDTO.builder()
-                .id(1)
-                .name("alice")
-                .role("STUDENT")
-                .build();
-
-        when(userService.register(any(UserRequestDTO.class))).thenReturn(response);
-
-        mockMvc.perform(post("/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.name").value("alice"))
-                .andExpect(jsonPath("$.role").value("STUDENT"));
-    }
-
-    @Test
-    void register_shouldReturnBadRequest_whenNameBlank() throws Exception {
-        String invalidRequest = "{\"name\":\"\",\"password\":\"pass\",\"role\":\"STUDENT\"}";
-
-        mockMvc.perform(post("/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidRequest))
-                .andExpect(status().isBadRequest());
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -89,62 +63,111 @@ class UserControllerTest {
         LoginResponseDTO response = LoginResponseDTO.builder()
                 .token("jwt-token")
                 .tokenType("Bearer")
-                .user(UserResponseDTO.builder().id(2).name("admin").role("ADMIN").build())
+                .user(UserResponseDTO.builder().id(2).username("admin").name("Admin").role("ADMIN").build())
                 .build();
 
         when(userService.login(any())).thenReturn(response);
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"admin\",\"password\":\"secret\"}"))
+                        .content("{\"username\":\"admin\",\"password\":\"secret\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("jwt-token"))
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.user.name").value("admin"));
+                .andExpect(jsonPath("$.user.username").value("admin"));
+    }
+
+    @Test
+    void login_shouldReturnBadRequest_whenUsernameBlank() throws Exception {
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"\",\"password\":\"secret\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createStudent_shouldReturnCreated() throws Exception {
+        CreateStudentResponseDTO response = CreateStudentResponseDTO.builder()
+                .id(10)
+                .studentId("SE150001")
+                .name("Student One")
+                .username("s123456")
+                .password("p123456")
+                .role("STUDENT")
+                .build();
+
+        when(userService.createStudent(any())).thenReturn(response);
+
+        mockMvc.perform(post("/users/students")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"studentId\":\"SE150001\",\"name\":\"Student One\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.role").value("STUDENT"));
     }
 
     @Test
     void getAllUsers_shouldReturnOkWithList() throws Exception {
-        when(userService.getAllUsers()).thenReturn(List.of(
-                UserResponseDTO.builder().id(1).name("u1").role("STUDENT").build(),
-                UserResponseDTO.builder().id(2).name("u2").role("ADMIN").build()
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("teacher01", null, List.of())
+        );
+
+        when(userService.getAllUsers("teacher01")).thenReturn(List.of(
+                UserResponseDTO.builder().id(1).username("u1").name("User One").role("STUDENT").build(),
+                UserResponseDTO.builder().id(2).username("u2").name("User Two").role("STUDENT").build()
         ));
 
         mockMvc.perform(get("/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("u1"))
-                .andExpect(jsonPath("$[1].role").value("ADMIN"));
+                .andExpect(jsonPath("$[0].username").value("u1"))
+                .andExpect(jsonPath("$[1].role").value("STUDENT"));
     }
 
     @Test
     void getUserById_shouldReturnOk() throws Exception {
-        when(userService.getUserById(5)).thenReturn(
-                UserResponseDTO.builder().id(5).name("john").role("STUDENT").build()
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("admin", null, List.of())
+        );
+
+        when(userService.getUserById(5, "admin")).thenReturn(
+                UserResponseDTO.builder().id(5).username("john").name("John").role("STUDENT").build()
         );
 
         mockMvc.perform(get("/users/5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(5))
-                .andExpect(jsonPath("$.name").value("john"));
+                .andExpect(jsonPath("$.username").value("john"));
     }
 
     @Test
     void updateUser_shouldReturnOk() throws Exception {
-        UserRequestDTO request = new UserRequestDTO();
-        request.setName("new-name");
-        request.setPassword("new-password");
-        request.setRole("ADMIN");
-
-        when(userService.updateUser(eq(3), any(UserRequestDTO.class))).thenReturn(
-                UserResponseDTO.builder().id(3).name("new-name").role("ADMIN").build()
+        when(userService.updateUser(eq(3), any())).thenReturn(
+                UserResponseDTO.builder().id(3).username("teacher03").name("Teacher 03").role("TEACHER").build()
         );
 
         mockMvc.perform(put("/users/3")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .content("{\"username\":\"teacher03\",\"password\":\"new-pass\",\"name\":\"Teacher 03\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(3))
-                .andExpect(jsonPath("$.role").value("ADMIN"));
+                .andExpect(jsonPath("$.role").value("TEACHER"));
+    }
+
+    @Test
+    void updateMyProfile_shouldReturnOk() throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("teacher01", null, List.of())
+        );
+
+        when(userService.updateMyProfile(any(), eq("teacher01"))).thenReturn(
+                UserResponseDTO.builder().id(9).username("teacher01").name("Teacher Updated").role("TEACHER").build()
+        );
+
+        mockMvc.perform(put("/users/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Teacher Updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Teacher Updated"));
     }
 
     @Test

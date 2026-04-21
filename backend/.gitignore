@@ -38,3 +38,5 @@ build/
 
 ### Module README files ###
 src/main/java/com/gr1/exam/**/README.md
+
+/uploads/

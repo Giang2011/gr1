@@ -1,5 +1,6 @@
 package com.gr1.exam.module.session.entity;
 
+import com.gr1.exam.module.exam.entity.ExamVariantQuestion;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,8 +24,12 @@ public class UserAnswer {
     private Integer id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "exam_question_id", nullable = false)
-    private ExamQuestion examQuestion;
+    @JoinColumn(name = "exam_session_id", nullable = false)
+    private ExamSession examSession;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "variant_question_id", nullable = false)
+    private ExamVariantQuestion variantQuestion;
 
     @OneToMany(mappedBy = "userAnswer", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

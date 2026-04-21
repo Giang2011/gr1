@@ -6,6 +6,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,7 +15,6 @@ import java.util.List;
 /**
  * REST Controller cho User & Authentication.
  * Endpoints: /auth/**, /users/**
- * (Prefix /api/v1 được thêm bởi context-path trong application.properties)
  */
 @RestController
 @RequiredArgsConstructor
@@ -21,59 +22,86 @@ public class UserController {
 
     private final UserService userService;
 
-    // ==================== Authentication (Public) ====================
+    // ==================== Authentication ====================
 
     /**
-     * POST /api/v1/auth/register — Đăng ký tài khoản mới.
-     */
-    @PostMapping("/auth/register")
-    public ResponseEntity<UserResponseDTO> register(@Valid @RequestBody UserRequestDTO request) {
-        UserResponseDTO response = userService.register(request);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
-    }
-
-    /**
-     * POST /api/v1/auth/login — Đăng nhập, nhận JWT token.
+     * POST /api/v1/auth/login — Đăng nhập bằng username.
      */
     @PostMapping("/auth/login")
     public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO request) {
-        LoginResponseDTO response = userService.login(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(userService.login(request));
     }
 
-    // ==================== User Management (ADMIN only) ====================
+    // ==================== Tạo tài khoản ====================
 
     /**
-     * GET /api/v1/users — Danh sách tất cả user.
+     * POST /api/v1/users/students — Tạo student (ADMIN/TEACHER).
+     */
+    @PostMapping("/users/students")
+    public ResponseEntity<CreateStudentResponseDTO> createStudent(
+            @Valid @RequestBody CreateStudentRequestDTO request) {
+        return new ResponseEntity<>(userService.createStudent(request), HttpStatus.CREATED);
+    }
+
+    /**
+     * POST /api/v1/users/teachers — Tạo teacher (ADMIN only).
+     */
+    @PostMapping("/users/teachers")
+    public ResponseEntity<UserResponseDTO> createTeacher(
+            @Valid @RequestBody CreateTeacherRequestDTO request) {
+        return new ResponseEntity<>(userService.createTeacher(request), HttpStatus.CREATED);
+    }
+
+    // ==================== CRUD ====================
+
+    /**
+     * GET /api/v1/users — Danh sách users (ADMIN/TEACHER).
      */
     @GetMapping("/users")
     public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
-        return ResponseEntity.ok(userService.getAllUsers());
+        return ResponseEntity.ok(userService.getAllUsers(getCurrentUsername()));
     }
 
     /**
-     * GET /api/v1/users/{id} — Chi tiết user theo ID.
+     * GET /api/v1/users/{id} — Chi tiết user (ADMIN/TEACHER).
      */
     @GetMapping("/users/{id}")
     public ResponseEntity<UserResponseDTO> getUserById(@PathVariable Integer id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+        return ResponseEntity.ok(userService.getUserById(id, getCurrentUsername()));
     }
 
     /**
-     * PUT /api/v1/users/{id} — Cập nhật thông tin user.
+     * PUT /api/v1/users/me — Teacher tự cập nhật profile.
+     */
+    @PutMapping("/users/me")
+    public ResponseEntity<UserResponseDTO> updateMyProfile(
+            @Valid @RequestBody UpdateProfileRequestDTO request) {
+        return ResponseEntity.ok(userService.updateMyProfile(request, getCurrentUsername()));
+    }
+
+    /**
+     * PUT /api/v1/users/{id} — Admin sửa user.
      */
     @PutMapping("/users/{id}")
-    public ResponseEntity<UserResponseDTO> updateUser(@PathVariable Integer id,
-                                                       @Valid @RequestBody UserRequestDTO request) {
+    public ResponseEntity<UserResponseDTO> updateUser(
+            @PathVariable Integer id,
+            @Valid @RequestBody CreateTeacherRequestDTO request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 
     /**
-     * DELETE /api/v1/users/{id} — Xoá user.
+     * DELETE /api/v1/users/{id} — Admin xoá user (soft delete).
      */
     @DeleteMapping("/users/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Integer id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // ==================== Helper ====================
+
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication.getName();
     }
 }

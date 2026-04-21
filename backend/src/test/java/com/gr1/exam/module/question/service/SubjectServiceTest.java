@@ -5,6 +5,7 @@ import com.gr1.exam.core.exception.ResourceNotFoundException;
 import com.gr1.exam.module.question.dto.SubjectRequestDTO;
 import com.gr1.exam.module.question.dto.SubjectResponseDTO;
 import com.gr1.exam.module.question.entity.Subject;
+import com.gr1.exam.module.question.repository.ChapterRepository;
 import com.gr1.exam.module.question.repository.QuestionRepository;
 import com.gr1.exam.module.question.repository.SubjectRepository;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,9 @@ class SubjectServiceTest {
     @Mock
     private QuestionRepository questionRepository;
 
+    @Mock
+    private ChapterRepository chapterRepository;
+
     @InjectMocks
     private SubjectService subjectService;
 
@@ -37,6 +41,8 @@ class SubjectServiceTest {
     void createSubject_shouldReturnCreatedSubject() {
         SubjectRequestDTO request = new SubjectRequestDTO();
         request.setName("Toan");
+
+        when(chapterRepository.findBySubjectIdOrderByChapterOrder(1)).thenReturn(java.util.List.of());
 
         when(subjectRepository.save(org.mockito.ArgumentMatchers.any(Subject.class)))
                 .thenAnswer(invocation -> {

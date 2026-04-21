@@ -7,6 +7,8 @@ import lombok.Builder;
 @Builder
 public class UserResponseDTO {
     private Integer id;
+    private String username;
     private String name;
+    private String studentId;  // null cho ADMIN/TEACHER
     private String role;
 }

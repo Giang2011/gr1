@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/results")
+@RequestMapping("/results")
 @RequiredArgsConstructor
 public class GradingController {
     private final GradingService gradingService;
@@ -29,7 +29,7 @@ public class GradingController {
 
     @GetMapping("/exam/{examId}")
     public ResponseEntity<ExamResultsResponseDTO> getResultsByExam(@PathVariable Integer examId) {
-        ensureAdmin();
+        ensureAdminOrTeacher();
         return ResponseEntity.ok(gradingService.getResultsByExam(examId));
     }
 
@@ -41,17 +41,17 @@ public class GradingController {
     private Integer getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String username = authentication.getName();
-        User user = userRepository.findByName(username)
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UnauthorizedException("Không tìm thấy thông tin người dùng hiện tại."));
         return user.getId();
     }
 
-    private void ensureAdmin() {
+    private void ensureAdminOrTeacher() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        boolean isAdmin = authentication.getAuthorities().stream()
+        boolean hasAccess = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch("ROLE_ADMIN"::equals);
-        if (!isAdmin) {
+                .anyMatch(a -> "ROLE_ADMIN".equals(a) || "ROLE_TEACHER".equals(a));
+        if (!hasAccess) {
             throw new UnauthorizedException("Bạn không có quyền truy cập tài nguyên này.");
         }
     }

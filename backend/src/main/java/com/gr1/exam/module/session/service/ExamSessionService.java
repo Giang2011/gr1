@@ -2,27 +2,23 @@ package com.gr1.exam.module.session.service;
 
 import com.gr1.exam.core.exception.BadRequestException;
 import com.gr1.exam.core.exception.ResourceNotFoundException;
-import com.gr1.exam.core.utils.ShuffleUtils;
 import com.gr1.exam.module.exam.entity.Exam;
+import com.gr1.exam.module.exam.entity.ExamVariant;
+import com.gr1.exam.module.exam.entity.ExamVariantAnswer;
+import com.gr1.exam.module.exam.entity.ExamVariantQuestion;
 import com.gr1.exam.module.exam.repository.ExamParticipantRepository;
 import com.gr1.exam.module.exam.repository.ExamRepository;
+import com.gr1.exam.module.exam.repository.ExamVariantAnswerRepository;
+import com.gr1.exam.module.exam.repository.ExamVariantQuestionRepository;
+import com.gr1.exam.module.exam.repository.ExamVariantRepository;
 import com.gr1.exam.module.grading.service.GradingService;
-import com.gr1.exam.module.question.entity.Answer;
-import com.gr1.exam.module.question.entity.Question;
-import com.gr1.exam.module.question.repository.AnswerRepository;
-import com.gr1.exam.module.question.repository.QuestionRepository;
 import com.gr1.exam.module.session.dto.ExamQuestionResponseDTO;
 import com.gr1.exam.module.session.dto.ExamSessionResponseDTO;
 import com.gr1.exam.module.session.dto.QuestionAnswerSubmissionDTO;
 import com.gr1.exam.module.session.dto.SubmitSessionRequestDTO;
-import com.gr1.exam.module.session.dto.UserAnswerRequestDTO;
-import com.gr1.exam.module.session.entity.ExamAnswer;
-import com.gr1.exam.module.session.entity.ExamQuestion;
 import com.gr1.exam.module.session.entity.ExamSession;
 import com.gr1.exam.module.session.entity.UserAnswer;
 import com.gr1.exam.module.session.entity.UserAnswerSelection;
-import com.gr1.exam.module.session.repository.ExamAnswerRepository;
-import com.gr1.exam.module.session.repository.ExamQuestionRepository;
 import com.gr1.exam.module.session.repository.ExamSessionRepository;
 import com.gr1.exam.module.session.repository.UserAnswerRepository;
 import com.gr1.exam.module.user.entity.User;
@@ -32,32 +28,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * ★ Service cốt lõi: Quản lý phiên thi, sinh mã đề, xáo trộn, nộp bài. ★
+ * ★ Service cốt lõi: Quản lý phiên thi, gán variant, nộp bài. ★
  */
 @Service
 @RequiredArgsConstructor
 public class ExamSessionService {
 
     private final ExamSessionRepository examSessionRepository;
-    private final ExamQuestionRepository examQuestionRepository;
-    private final ExamAnswerRepository examAnswerRepository;
+    private final ExamVariantRepository examVariantRepository;
+    private final ExamVariantQuestionRepository examVariantQuestionRepository;
+    private final ExamVariantAnswerRepository examVariantAnswerRepository;
     private final UserAnswerRepository userAnswerRepository;
-    private final QuestionRepository questionRepository;
-    private final AnswerRepository answerRepository;
     private final ExamRepository examRepository;
     private final ExamParticipantRepository examParticipantRepository;
     private final UserRepository userRepository;
     private final GradingService gradingService;
 
+    /**
+     * Bắt đầu phiên thi — gán random 1 variant đã tráo sẵn.
+     */
     @Transactional
     public ExamSessionResponseDTO startSession(Integer examId, Integer userId) {
         Exam exam = examRepository.findById(examId)
@@ -77,108 +70,62 @@ public class ExamSessionService {
                     throw new BadRequestException("Bạn đã có phiên thi đang diễn ra cho kỳ thi này.");
                 });
 
+        // ★ Random chọn 1 variant đã tráo sẵn
+        List<ExamVariant> variants = examVariantRepository.findByExamId(examId);
+        if (variants.isEmpty()) {
+            throw new BadRequestException("Kỳ thi chưa có đề thi nào được tạo.");
+        }
+        ExamVariant assignedVariant = variants.get(new Random().nextInt(variants.size()));
+
         ExamSession session = ExamSession.builder()
                 .exam(exam)
                 .user(user)
+                .variant(assignedVariant)
                 .build();
         session = examSessionRepository.save(session);
-
-        List<Question> allQuestions = questionRepository.findBySubjectId(exam.getSubject().getId());
-        if (allQuestions.size() < exam.getTotalQuestions()) {
-            throw new BadRequestException(
-                    "Ngân hàng câu hỏi không đủ. Cần " + exam.getTotalQuestions()
-                            + " câu, hiện có " + allQuestions.size() + " câu.");
-        }
-
-        List<Question> shuffledQuestions = ShuffleUtils.shuffle(allQuestions);
-        List<Question> selectedQuestions = shuffledQuestions.subList(0, exam.getTotalQuestions());
-
-        for (int i = 0; i < selectedQuestions.size(); i++) {
-            Question question = selectedQuestions.get(i);
-
-            ExamQuestion examQuestion = ExamQuestion.builder()
-                    .examSession(session)
-                    .question(question)
-                    .orderIndex(i + 1)
-                    .build();
-            examQuestion = examQuestionRepository.save(examQuestion);
-
-            List<Answer> answers = answerRepository.findByQuestionId(question.getId());
-            List<Answer> shuffledAnswers = ShuffleUtils.shuffle(answers);
-
-            for (int j = 0; j < shuffledAnswers.size(); j++) {
-                ExamAnswer examAnswer = ExamAnswer.builder()
-                        .examQuestion(examQuestion)
-                        .answer(shuffledAnswers.get(j))
-                        .orderIndex(j)
-                        .build();
-                examAnswerRepository.save(examAnswer);
-            }
-        }
 
         return toSessionResponseDTO(session);
     }
 
-    public List<ExamQuestionResponseDTO> getShuffledQuestions(Integer sessionId, Integer userId) {
+    /**
+     * Lấy đề thi — từ variant đã gán.
+     */
+    public List<ExamQuestionResponseDTO> getQuestions(Integer sessionId, Integer userId) {
         ExamSession session = getValidDoingSession(sessionId, userId);
+        ExamVariant variant = session.getVariant();
 
-        List<ExamQuestion> examQuestions = examQuestionRepository
-                .findByExamSessionIdOrderByOrderIndex(session.getId());
+        List<ExamVariantQuestion> vQuestions = examVariantQuestionRepository
+                .findByVariantIdOrderByOrderIndex(variant.getId());
 
-        List<ExamQuestionResponseDTO> result = new ArrayList<>();
-        for (ExamQuestion eq : examQuestions) {
-            List<ExamAnswer> examAnswers = examAnswerRepository
-                    .findByExamQuestionIdOrderByOrderIndex(eq.getId());
+        return vQuestions.stream().map(vq -> {
+            List<ExamVariantAnswer> vAnswers = examVariantAnswerRepository
+                    .findByVariantQuestionIdOrderByOrderIndex(vq.getId());
 
-            List<ExamQuestionResponseDTO.ShuffledAnswerDTO> answerDTOs = new ArrayList<>();
-            for (ExamAnswer ea : examAnswers) {
-                answerDTOs.add(ExamQuestionResponseDTO.ShuffledAnswerDTO.builder()
-                        .examAnswerId(ea.getId())
-                        .orderIndex(ea.getOrderIndex())
-                        .content(ea.getAnswer().getContent())
-                        .build());
-            }
-
-            long correctCount = eq.getQuestion().getAnswers().stream()
+            long correctCount = vq.getQuestion().getAnswers().stream()
                     .filter(a -> a.getIsCorrect() != null && a.getIsCorrect())
                     .count();
             boolean isMultipleChoice = correctCount > 1;
 
-            result.add(ExamQuestionResponseDTO.builder()
-                    .examQuestionId(eq.getId())
-                    .orderIndex(eq.getOrderIndex())
-                    .content(eq.getQuestion().getContent())
+            return ExamQuestionResponseDTO.builder()
+                    .variantQuestionId(vq.getId())
+                    .orderIndex(vq.getOrderIndex())
+                    .content(vq.getQuestion().getContent())
+                    .imageUrl(vq.getQuestion().getImageUrl())
                     .isMultipleChoice(isMultipleChoice)
-                    .answers(answerDTOs)
-                    .build());
-        }
-
-        return result;
+                    .answers(vAnswers.stream().map(va -> ExamQuestionResponseDTO.ShuffledAnswerDTO.builder()
+                            .answerId(va.getAnswer().getId())
+                            .content(va.getAnswer().getContent())
+                            .imageUrl(va.getAnswer().getImageUrl())
+                            .orderIndex(va.getOrderIndex())
+                            .build()
+                    ).collect(Collectors.toList()))
+                    .build();
+        }).collect(Collectors.toList());
     }
 
     /**
-     * Endpoint compatibility mode: lưu 1 lựa chọn cho 1 câu hỏi.
+     * Nộp bài one-shot.
      */
-    @Transactional
-    public void saveAnswer(Integer sessionId, Integer userId, UserAnswerRequestDTO dto) {
-        ExamSession session = getValidDoingSession(sessionId, userId);
-
-        ExamQuestion examQuestion = examQuestionRepository.findById(dto.getExamQuestionId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Câu hỏi không tìm thấy với id: " + dto.getExamQuestionId()));
-
-        if (!examQuestion.getExamSession().getId().equals(session.getId())) {
-            throw new BadRequestException("Câu hỏi không thuộc phiên thi này.");
-        }
-
-        List<Integer> selectedIds = new ArrayList<>();
-        if (dto.getSelectedExamAnswerId() != null) {
-            selectedIds.add(dto.getSelectedExamAnswerId());
-        }
-
-        upsertAnswerSelection(examQuestion, selectedIds);
-    }
-
     @Transactional
     public ExamSessionResponseDTO submitSession(Integer sessionId, Integer userId, SubmitSessionRequestDTO dto) {
         ExamSession session = examSessionRepository.findByIdAndUserIdForUpdate(sessionId, userId)
@@ -201,16 +148,18 @@ public class ExamSessionService {
     }
 
     private void saveSubmittedAnswers(ExamSession session, SubmitSessionRequestDTO dto) {
-        List<ExamQuestion> examQuestions = examQuestionRepository.findByExamSessionIdOrderByOrderIndex(session.getId());
+        ExamVariant variant = session.getVariant();
+        List<ExamVariantQuestion> variantQuestions = examVariantQuestionRepository
+                .findByVariantIdOrderByOrderIndex(variant.getId());
 
-        Map<Integer, ExamQuestion> questionById = examQuestions.stream()
-                .collect(Collectors.toMap(ExamQuestion::getId, q -> q));
+        Map<Integer, ExamVariantQuestion> questionById = variantQuestions.stream()
+                .collect(Collectors.toMap(ExamVariantQuestion::getId, q -> q));
 
         Map<Integer, List<Integer>> submittedSelectionsByQuestion = new HashMap<>();
         Set<Integer> uniqueQuestionIds = new HashSet<>();
 
         for (QuestionAnswerSubmissionDTO answer : dto.getAnswers()) {
-            Integer questionId = answer.getExamQuestionId();
+            Integer questionId = answer.getVariantQuestionId();
             if (!uniqueQuestionIds.add(questionId)) {
                 throw new BadRequestException("Danh sách submit chứa câu hỏi bị lặp: " + questionId);
             }
@@ -219,47 +168,48 @@ public class ExamSessionService {
             }
 
             submittedSelectionsByQuestion.put(questionId,
-                    answer.getSelectedExamAnswerIds() == null ? new ArrayList<>() : answer.getSelectedExamAnswerIds());
+                    answer.getSelectedAnswerIds() == null ? new ArrayList<>() : answer.getSelectedAnswerIds());
         }
 
-        for (ExamQuestion examQuestion : examQuestions) {
-            List<Integer> selectedExamAnswerIds = submittedSelectionsByQuestion
-                    .getOrDefault(examQuestion.getId(), new ArrayList<>());
-            upsertAnswerSelection(examQuestion, selectedExamAnswerIds);
+        for (ExamVariantQuestion variantQuestion : variantQuestions) {
+            List<Integer> selectedAnswerIds = submittedSelectionsByQuestion
+                    .getOrDefault(variantQuestion.getId(), new ArrayList<>());
+            upsertAnswerSelection(session, variantQuestion, selectedAnswerIds);
         }
     }
 
-    private void upsertAnswerSelection(ExamQuestion examQuestion, List<Integer> selectedExamAnswerIds) {
-        List<Integer> normalizedIds = selectedExamAnswerIds == null ? new ArrayList<>() : selectedExamAnswerIds.stream()
-                .filter(id -> id != null)
+    private void upsertAnswerSelection(ExamSession session, ExamVariantQuestion variantQuestion, List<Integer> selectedAnswerIds) {
+        List<Integer> normalizedIds = selectedAnswerIds == null ? new ArrayList<>() : selectedAnswerIds.stream()
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList();
 
-        List<ExamAnswer> selectedExamAnswers = normalizedIds.isEmpty()
-                ? new ArrayList<>()
-                : examAnswerRepository.findByIdIn(normalizedIds);
+        // Validate selected answers belong to this variant question
+        if (!normalizedIds.isEmpty()) {
+            List<ExamVariantAnswer> vAnswers = examVariantAnswerRepository
+                    .findByVariantQuestionIdOrderByOrderIndex(variantQuestion.getId());
+            Set<Integer> validAnswerIds = vAnswers.stream()
+                    .map(va -> va.getAnswer().getId())
+                    .collect(Collectors.toSet());
 
-        if (selectedExamAnswers.size() != normalizedIds.size()) {
-            throw new ResourceNotFoundException("Một hoặc nhiều đáp án được chọn không tồn tại.");
-        }
-
-        for (ExamAnswer examAnswer : selectedExamAnswers) {
-            if (!examAnswer.getExamQuestion().getId().equals(examQuestion.getId())) {
-                throw new BadRequestException("Đáp án " + examAnswer.getId() + " không thuộc câu hỏi "
-                        + examQuestion.getId());
+            for (Integer answerId : normalizedIds) {
+                if (!validAnswerIds.contains(answerId)) {
+                    throw new BadRequestException("Đáp án " + answerId + " không thuộc câu hỏi " + variantQuestion.getId());
+                }
             }
         }
 
-        UserAnswer userAnswer = userAnswerRepository.findByExamQuestionId(examQuestion.getId())
+        UserAnswer userAnswer = userAnswerRepository.findByVariantQuestionId(variantQuestion.getId())
                 .orElse(UserAnswer.builder()
-                        .examQuestion(examQuestion)
+                        .examSession(session)
+                        .variantQuestion(variantQuestion)
                         .build());
 
         userAnswer.getSelectedAnswers().clear();
-        for (ExamAnswer examAnswer : selectedExamAnswers) {
+        for (Integer answerId : normalizedIds) {
             userAnswer.getSelectedAnswers().add(UserAnswerSelection.builder()
                     .userAnswer(userAnswer)
-                    .selectedAnswer(examAnswer.getAnswer())
+                    .selectedAnswer(com.gr1.exam.module.question.entity.Answer.builder().id(answerId).build())
                     .build());
         }
 

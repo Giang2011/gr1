@@ -2,9 +2,11 @@ package com.gr1.exam.module.question.service;
 
 import com.gr1.exam.core.exception.BadRequestException;
 import com.gr1.exam.core.exception.ResourceNotFoundException;
+import com.gr1.exam.module.question.dto.ChapterResponseDTO;
 import com.gr1.exam.module.question.dto.SubjectRequestDTO;
 import com.gr1.exam.module.question.dto.SubjectResponseDTO;
 import com.gr1.exam.module.question.entity.Subject;
+import com.gr1.exam.module.question.repository.ChapterRepository;
 import com.gr1.exam.module.question.repository.QuestionRepository;
 import com.gr1.exam.module.question.repository.SubjectRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ public class SubjectService {
 
     private final SubjectRepository subjectRepository;
     private final QuestionRepository questionRepository;
+    private final ChapterRepository chapterRepository;
 
     /**
      * Lấy danh sách tất cả môn học.
@@ -31,7 +34,7 @@ public class SubjectService {
     }
 
     /**
-     * Lấy môn học theo ID.
+     * Lấy môn học theo ID (kèm danh sách chương).
      */
     public SubjectResponseDTO getSubjectById(Integer id) {
         Subject subject = subjectRepository.findById(id)
@@ -62,7 +65,7 @@ public class SubjectService {
     }
 
     /**
-     * Xoá môn học — từ chối nếu còn câu hỏi thuộc môn này.
+     * Xoá môn học — soft delete (từ chối nếu còn câu hỏi thuộc môn này).
      */
     public void deleteSubject(Integer id) {
         Subject subject = subjectRepository.findById(id)
@@ -80,9 +83,22 @@ public class SubjectService {
     // ==================== Helper ====================
 
     private SubjectResponseDTO toResponseDTO(Subject subject) {
+        List<ChapterResponseDTO> chapterDTOs = chapterRepository
+                .findBySubjectIdOrderByChapterOrder(subject.getId())
+                .stream()
+                .map(ch -> ChapterResponseDTO.builder()
+                        .id(ch.getId())
+                        .subjectId(ch.getSubject().getId())
+                        .name(ch.getName())
+                        .chapterOrder(ch.getChapterOrder())
+                        .questionCount(questionRepository.countByChapterId(ch.getId()))
+                        .build())
+                .collect(Collectors.toList());
+
         return SubjectResponseDTO.builder()
                 .id(subject.getId())
                 .name(subject.getName())
+                .chapters(chapterDTOs)
                 .build();
     }
 }

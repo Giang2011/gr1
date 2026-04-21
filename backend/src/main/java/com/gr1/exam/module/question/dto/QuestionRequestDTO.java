@@ -6,6 +6,11 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * DTO nhận dữ liệu text (JSON) khi tạo/cập nhật câu hỏi.
+ * Được gửi dưới dạng JSON string trong part "data" của multipart/form-data request.
+ * Ảnh minh họa được gửi riêng qua các part file (questionImage, answerImages[]).
+ */
 @Data
 public class QuestionRequestDTO {
 
@@ -14,6 +19,9 @@ public class QuestionRequestDTO {
 
     @NotNull(message = "Môn học không được để trống")
     private Integer subjectId;
+
+    @NotNull(message = "Chương không được để trống")
+    private Integer chapterId;  // Bắt buộc
 
     private List<AnswerDTO> answers;
 

@@ -9,8 +9,8 @@ import java.util.List;
 @Data
 public class QuestionAnswerSubmissionDTO {
 
-    @NotNull(message = "ID câu hỏi trong đề thi không được để trống")
-    private Integer examQuestionId;
+    @NotNull(message = "ID câu hỏi variant không được để trống")
+    private Integer variantQuestionId;
 
-    private List<Integer> selectedExamAnswerIds = new ArrayList<>();
+    private List<Integer> selectedAnswerIds = new ArrayList<>();
 }

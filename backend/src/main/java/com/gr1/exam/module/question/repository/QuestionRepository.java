@@ -15,8 +15,21 @@ public interface QuestionRepository extends JpaRepository<Question, Integer> {
 
     long countBySubjectId(Integer subjectId);
 
+    // Chapter-based queries
+    List<Question> findByChapterId(Integer chapterId);
+    long countByChapterId(Integer chapterId);
+
     // Pagination + filtering
     Page<Question> findBySubjectId(Integer subjectId, Pageable pageable);
+    Page<Question> findByChapterId(Integer chapterId, Pageable pageable);
+    Page<Question> findBySubjectIdAndChapterId(Integer subjectId, Integer chapterId, Pageable pageable);
+        Page<Question> findByChapterIdAndContentContainingIgnoreCase(Integer chapterId, String keyword, Pageable pageable);
+        Page<Question> findBySubjectIdAndChapterIdAndContentContainingIgnoreCase(
+            Integer subjectId,
+            Integer chapterId,
+            String keyword,
+            Pageable pageable
+        );
 
     Page<Question> findByContentContainingIgnoreCase(String keyword, Pageable pageable);
 

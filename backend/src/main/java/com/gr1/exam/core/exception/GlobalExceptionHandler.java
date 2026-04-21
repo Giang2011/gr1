@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * Xử lý Exception toàn cục cho tất cả Controller.
@@ -36,6 +37,13 @@ public class GlobalExceptionHandler {
                 ? "Dữ liệu đầu vào không hợp lệ."
                 : ex.getBindingResult().getFieldErrors().get(0).getDefaultMessage();
         ErrorResponse error = new ErrorResponse(HttpStatus.BAD_REQUEST.value(), message);
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        ErrorResponse error = new ErrorResponse(HttpStatus.BAD_REQUEST.value(),
+                "File upload vượt quá kích thước cho phép (tối đa 10MB/file, 15MB/request).");
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 

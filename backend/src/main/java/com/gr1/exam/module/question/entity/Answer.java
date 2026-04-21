@@ -2,6 +2,8 @@ package com.gr1.exam.module.question.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 /**
  * Entity: Đáp án của câu hỏi.
@@ -9,6 +11,8 @@ import lombok.*;
  */
 @Entity
 @Table(name = "answers")
+@SQLDelete(sql = "UPDATE answers SET deleted = true WHERE id = ?")
+@Where(clause = "deleted = false")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,6 +30,13 @@ public class Answer {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "image_url")
+    private String imageUrl;  // Đường dẫn ảnh minh họa
+
     @Column(name = "is_correct")
     private Boolean isCorrect;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean deleted = false;
 }

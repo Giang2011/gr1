@@ -14,6 +14,7 @@ public class ExamResponseDTO {
     private String subjectName;
     private Integer duration;
     private Integer totalQuestions;
+    private Integer totalVariants;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String status;           // UPCOMING, ONGOING, COMPLETED

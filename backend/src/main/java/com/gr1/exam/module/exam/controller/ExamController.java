@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,11 +30,11 @@ public class ExamController {
     // ==================== CRUD Kỳ thi ====================
 
     /**
-     * GET /api/v1/exams — Danh sách kỳ thi (Authenticated).
+     * GET /api/v1/exams — Danh sách kỳ thi (phân quyền theo caller).
      */
     @GetMapping
     public ResponseEntity<List<ExamResponseDTO>> getAllExams() {
-        return ResponseEntity.ok(examService.getAllExams());
+        return ResponseEntity.ok(examService.getAllExams(getCurrentUsername()));
     }
 
     /**
@@ -44,7 +46,7 @@ public class ExamController {
     }
 
     /**
-     * POST /api/v1/exams — Tạo kỳ thi mới (ADMIN).
+     * POST /api/v1/exams — Tạo kỳ thi mới (ADMIN/TEACHER).
      */
     @PostMapping
     public ResponseEntity<ExamResponseDTO> createExam(@Valid @RequestBody ExamRequestDTO request) {
@@ -53,7 +55,7 @@ public class ExamController {
     }
 
     /**
-     * PUT /api/v1/exams/{id} — Cập nhật kỳ thi (ADMIN).
+     * PUT /api/v1/exams/{id} — Cập nhật kỳ thi (ADMIN/TEACHER).
      */
     @PutMapping("/{id}")
     public ResponseEntity<ExamResponseDTO> updateExam(@PathVariable Integer id,
@@ -62,7 +64,7 @@ public class ExamController {
     }
 
     /**
-     * DELETE /api/v1/exams/{id} — Xoá kỳ thi (ADMIN).
+     * DELETE /api/v1/exams/{id} — Xoá kỳ thi (ADMIN/TEACHER).
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteExam(@PathVariable Integer id) {
@@ -73,7 +75,7 @@ public class ExamController {
     // ==================== Quản lý Thí sinh ====================
 
     /**
-     * POST /api/v1/exams/{id}/participants — Thêm thí sinh (ADMIN).
+     * POST /api/v1/exams/{id}/participants — Thêm thí sinh (ADMIN/TEACHER).
      */
     @PostMapping("/{id}/participants")
     public ResponseEntity<Void> addParticipant(@PathVariable Integer id,
@@ -83,10 +85,26 @@ public class ExamController {
     }
 
     /**
-     * GET /api/v1/exams/{id}/participants — Danh sách thí sinh (ADMIN).
+     * DELETE /api/v1/exams/{examId}/participants/{userId} — Xoá thí sinh (ADMIN/TEACHER).
+     */
+    @DeleteMapping("/{examId}/participants/{userId}")
+    public ResponseEntity<Void> removeParticipant(@PathVariable Integer examId, @PathVariable Integer userId) {
+        examService.removeParticipant(examId, userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * GET /api/v1/exams/{id}/participants — Danh sách thí sinh (ADMIN/TEACHER).
      */
     @GetMapping("/{id}/participants")
     public ResponseEntity<List<UserResponseDTO>> getParticipants(@PathVariable Integer id) {
         return ResponseEntity.ok(examService.getParticipants(id));
+    }
+
+    // ==================== Helper ====================
+
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication.getName();
     }
 }

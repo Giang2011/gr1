@@ -3,9 +3,11 @@ package com.gr1.exam.module.exam.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class ExamRequestDTO {
@@ -21,6 +23,12 @@ public class ExamRequestDTO {
 
     @NotNull @Positive(message = "Số câu hỏi phải lớn hơn 0")
     private Integer totalQuestions;
+
+    @NotNull @Positive(message = "Số đề tráo phải lớn hơn 0")
+    private Integer totalVariants;  // Tổng số đề (1 gốc + N-1 tráo)
+
+    @NotNull @Size(min = 1, message = "Phải có ít nhất 1 cấu hình chương")
+    private List<ChapterConfigDTO> chapterConfigs;
 
     private LocalDateTime startTime;
     private LocalDateTime endTime;

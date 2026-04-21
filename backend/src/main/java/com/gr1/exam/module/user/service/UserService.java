@@ -4,6 +4,7 @@ import com.gr1.exam.core.exception.BadRequestException;
 import com.gr1.exam.core.exception.ResourceNotFoundException;
 import com.gr1.exam.core.exception.UnauthorizedException;
 import com.gr1.exam.core.security.JwtTokenProvider;
+import com.gr1.exam.core.utils.CredentialGenerator;
 import com.gr1.exam.module.user.dto.*;
 import com.gr1.exam.module.user.entity.User;
 import com.gr1.exam.module.user.repository.UserRepository;
@@ -18,11 +19,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Service xử lý nghiệp vụ User: đăng ký, đăng nhập, CRUD.
+ * Service xử lý nghiệp vụ User: đăng nhập, tạo student/teacher, CRUD.
  */
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    private static final int MAX_USERNAME_GENERATION_ATTEMPTS = 10;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -32,54 +35,21 @@ public class UserService {
     // ==================== Authentication ====================
 
     /**
-     * Đăng ký tài khoản mới.
-     * - Kiểm tra username đã tồn tại
-     * - Mã hoá password bằng BCrypt
-     * - Lưu vào DB
-     */
-    public UserResponseDTO register(UserRequestDTO request) {
-        // Kiểm tra username trùng
-        if (userRepository.existsByName(request.getName())) {
-            throw new BadRequestException("Tên đăng nhập đã tồn tại: " + request.getName());
-        }
-
-        // Xác định role (mặc định STUDENT)
-        User.Role role = User.Role.STUDENT;
-        if (request.getRole() != null && !request.getRole().isBlank()) {
-            try {
-                role = User.Role.valueOf(request.getRole().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                throw new BadRequestException("Role không hợp lệ: " + request.getRole());
-            }
-        }
-
-        // Tạo user mới
-        User user = User.builder()
-                .name(request.getName())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(role)
-                .build();
-
-        User savedUser = userRepository.save(user);
-        return toResponseDTO(savedUser);
-    }
-
-    /**
      * Đăng nhập — Xác thực qua AuthenticationManager, tạo JWT.
      */
     public LoginResponseDTO login(LoginRequestDTO request) {
         try {
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getName(), request.getPassword())
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
             );
         } catch (BadCredentialsException e) {
             throw new UnauthorizedException("Sai tên đăng nhập hoặc mật khẩu.");
         }
 
-        User user = userRepository.findByName(request.getName())
-                .orElseThrow(() -> new UnauthorizedException("User không tồn tại."));
+        User user = userRepository.findByUsername(request.getUsername())
+            .orElseThrow(() -> new UnauthorizedException("User không tồn tại."));
 
-        String token = jwtTokenProvider.generateToken(user.getName());
+        String token = jwtTokenProvider.generateToken(user.getUsername());
 
         return LoginResponseDTO.builder()
                 .token(token)
@@ -88,52 +58,118 @@ public class UserService {
                 .build();
     }
 
-    // ==================== CRUD (ADMIN) ====================
+    // ==================== Tạo tài khoản ====================
 
     /**
-     * Lấy danh sách tất cả user.
+     * Tạo student — Admin/Teacher nhập MSSV + tên, server random username/password.
      */
-    public List<UserResponseDTO> getAllUsers() {
-        return userRepository.findAll()
-                .stream()
-                .map(this::toResponseDTO)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Lấy user theo ID.
-     */
-    public UserResponseDTO getUserById(Integer id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User không tìm thấy với id: " + id));
-        return toResponseDTO(user);
-    }
-
-    /**
-     * Cập nhật thông tin user.
-     */
-    public UserResponseDTO updateUser(Integer id, UserRequestDTO request) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User không tìm thấy với id: " + id));
-
-        // Cập nhật name (kiểm tra trùng nếu đổi)
-        if (!user.getName().equals(request.getName()) && userRepository.existsByName(request.getName())) {
-            throw new BadRequestException("Tên đăng nhập đã tồn tại: " + request.getName());
+    public CreateStudentResponseDTO createStudent(CreateStudentRequestDTO request) {
+        // Validate MSSV chưa tồn tại
+        if (userRepository.existsByStudentId(request.getStudentId())) {
+            throw new BadRequestException("MSSV đã tồn tại: " + request.getStudentId());
         }
-        user.setName(request.getName());
+
+        // Random credentials
+        String randomUsername = generateUniqueRandomUsername();
+        String randomPassword = CredentialGenerator.randomPassword();
+
+        User user = User.builder()
+                .username(randomUsername)
+                .name(request.getName())
+                .studentId(request.getStudentId())
+                .password(passwordEncoder.encode(randomPassword))
+                .role(User.Role.STUDENT)
+                .build();
+
+        User saved = userRepository.save(user);
+
+        // Trả về credentials 1 lần duy nhất (plain text password)
+        return CreateStudentResponseDTO.builder()
+                .id(saved.getId())
+                .studentId(saved.getStudentId())
+                .name(saved.getName())
+                .username(randomUsername)
+                .password(randomPassword)  // Plain text — chỉ trả 1 lần
+                .role("STUDENT")
+                .build();
+    }
+
+    /**
+     * Tạo teacher — Chỉ Admin, nhập username + password + tên.
+     */
+    public UserResponseDTO createTeacher(CreateTeacherRequestDTO request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new BadRequestException("Username đã tồn tại: " + request.getUsername());
+        }
+
+        User user = User.builder()
+                .username(request.getUsername())
+                .name(request.getName())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(User.Role.TEACHER)
+                .build();
+
+        User saved = userRepository.save(user);
+        return toResponseDTO(saved);
+    }
+
+    // ==================== CRUD ====================
+
+    /**
+     * Lấy danh sách users — phân quyền theo role caller.
+     * Admin: xem tất cả. Teacher: chỉ xem STUDENT.
+     */
+    public List<UserResponseDTO> getAllUsers(String callerUsername) {
+        User caller = findByUsernameOrThrow(callerUsername);
+
+        List<User> users;
+        if (caller.getRole() == User.Role.ADMIN) {
+            users = userRepository.findAll();
+        } else {
+            // TEACHER chỉ xem STUDENT
+            users = userRepository.findByRole(User.Role.STUDENT);
+        }
+
+        return users.stream().map(this::toResponseDTO).collect(Collectors.toList());
+    }
+
+    /**
+     * Lấy user theo ID — Teacher chỉ xem STUDENT.
+     */
+    public UserResponseDTO getUserById(Integer id, String callerUsername) {
+        User caller = findByUsernameOrThrow(callerUsername);
+        User target = findByIdOrThrow(id);
+
+        // Teacher chỉ xem STUDENT
+        if (caller.getRole() == User.Role.TEACHER && target.getRole() != User.Role.STUDENT) {
+            throw new UnauthorizedException("TEACHER chỉ có quyền xem thông tin STUDENT.");
+        }
+
+        return toResponseDTO(target);
+    }
+
+    /**
+     * Cập nhật thông tin user — Chỉ ADMIN.
+     */
+    public UserResponseDTO updateUser(Integer id, CreateTeacherRequestDTO request) {
+        User user = findByIdOrThrow(id);
+
+        // Cập nhật username (kiểm tra trùng nếu đổi)
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            if (!user.getUsername().equals(request.getUsername()) && userRepository.existsByUsername(request.getUsername())) {
+                throw new BadRequestException("Username đã tồn tại: " + request.getUsername());
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        // Cập nhật name
+        if (request.getName() != null && !request.getName().isBlank()) {
+            user.setName(request.getName());
+        }
 
         // Cập nhật password nếu có
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
-        }
-
-        // Cập nhật role nếu có
-        if (request.getRole() != null && !request.getRole().isBlank()) {
-            try {
-                user.setRole(User.Role.valueOf(request.getRole().toUpperCase()));
-            } catch (IllegalArgumentException e) {
-                throw new BadRequestException("Role không hợp lệ: " + request.getRole());
-            }
         }
 
         User updatedUser = userRepository.save(user);
@@ -141,20 +177,72 @@ public class UserService {
     }
 
     /**
-     * Xoá user theo ID.
+     * Teacher tự cập nhật thông tin — PUT /users/me
+     */
+    public UserResponseDTO updateMyProfile(UpdateProfileRequestDTO request, String currentUsername) {
+        User user = findByUsernameOrThrow(currentUsername);
+
+        // CHỈ TEACHER mới được dùng endpoint này
+        if (user.getRole() != User.Role.TEACHER) {
+            throw new UnauthorizedException("Chỉ TEACHER có thể sử dụng chức năng này.");
+        }
+
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            if (!user.getUsername().equals(request.getUsername())
+                && userRepository.existsByUsername(request.getUsername())) {
+                throw new BadRequestException("Username đã tồn tại.");
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            user.setName(request.getName());
+        }
+
+        User updated = userRepository.save(user);
+        return toResponseDTO(updated);
+    }
+
+    /**
+     * Xoá user theo ID — Soft delete (tự động bởi @SQLDelete).
      */
     public void deleteUser(Integer id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User không tìm thấy với id: " + id));
+        User user = findByIdOrThrow(id);
         userRepository.delete(user);
     }
 
     // ==================== Helper ====================
 
+    private String generateUniqueRandomUsername() {
+        for (int i = 0; i < MAX_USERNAME_GENERATION_ATTEMPTS; i++) {
+            String candidate = CredentialGenerator.randomUsername();
+            if (!userRepository.existsByUsername(candidate)) {
+                return candidate;
+            }
+        }
+        throw new BadRequestException("Không thể sinh username ngẫu nhiên duy nhất. Vui lòng thử lại.");
+    }
+
+    private User findByUsernameOrThrow(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UnauthorizedException("Không xác thực được người dùng hiện tại."));
+    }
+
+    private User findByIdOrThrow(Integer id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User không tìm thấy với id: " + id));
+    }
+
     private UserResponseDTO toResponseDTO(User user) {
         return UserResponseDTO.builder()
                 .id(user.getId())
+                .username(user.getUsername())
                 .name(user.getName())
+                .studentId(user.getStudentId())
                 .role(user.getRole().name())
                 .build();
     }

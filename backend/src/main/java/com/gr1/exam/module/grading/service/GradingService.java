@@ -1,16 +1,16 @@
 package com.gr1.exam.module.grading.service;
 
 import com.gr1.exam.core.exception.ResourceNotFoundException;
+import com.gr1.exam.module.exam.entity.ExamVariantQuestion;
+import com.gr1.exam.module.exam.repository.ExamVariantQuestionRepository;
 import com.gr1.exam.module.grading.dto.ExamResultsResponseDTO;
 import com.gr1.exam.module.grading.dto.ResultResponseDTO;
 import com.gr1.exam.module.grading.entity.Result;
 import com.gr1.exam.module.grading.repository.ResultRepository;
 import com.gr1.exam.module.question.entity.Answer;
 import com.gr1.exam.module.question.repository.AnswerRepository;
-import com.gr1.exam.module.session.entity.ExamQuestion;
 import com.gr1.exam.module.session.entity.ExamSession;
 import com.gr1.exam.module.session.entity.UserAnswer;
-import com.gr1.exam.module.session.repository.ExamQuestionRepository;
 import com.gr1.exam.module.session.repository.ExamSessionRepository;
 import com.gr1.exam.module.session.repository.UserAnswerRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,13 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -37,7 +31,7 @@ public class GradingService {
     private final ResultRepository resultRepository;
     private final UserAnswerRepository userAnswerRepository;
     private final ExamSessionRepository examSessionRepository;
-    private final ExamQuestionRepository examQuestionRepository;
+    private final ExamVariantQuestionRepository examVariantQuestionRepository;
     private final AnswerRepository answerRepository;
 
     @Transactional
@@ -47,17 +41,21 @@ public class GradingService {
 
         Result existing = resultRepository.findByExamSessionId(examSessionId).orElse(null);
 
-        List<ExamQuestion> examQuestions = examQuestionRepository.findByExamSessionIdOrderByOrderIndex(examSessionId);
-        int totalQuestions = examQuestions.size();
+        // Lấy variant questions từ variant đã gán
+        List<ExamVariantQuestion> variantQuestions = examVariantQuestionRepository
+                .findByVariantIdOrderByOrderIndex(examSession.getVariant().getId());
+        int totalQuestions = variantQuestions.size();
 
-        Map<Integer, Set<Integer>> correctAnswerIdsByQuestionId = loadCorrectAnswerIdsByQuestion(examQuestions);
-        Map<Integer, Set<Integer>> selectedAnswerIdsByQuestionId = loadSelectedAnswerIdsByQuestion(examSessionId);
+        // Load đáp án đúng theo question gốc
+        Map<Integer, Set<Integer>> correctAnswerIdsByQuestionId = loadCorrectAnswerIdsByQuestion(variantQuestions);
+        // Load đáp án user đã chọn
+        Map<Integer, Set<Integer>> selectedAnswerIdsByVarQuestion = loadSelectedAnswerIdsByVarQuestion(examSessionId);
 
         int totalCorrect = 0;
-        for (ExamQuestion examQuestion : examQuestions) {
-            Integer questionId = examQuestion.getQuestion().getId();
+        for (ExamVariantQuestion vq : variantQuestions) {
+            Integer questionId = vq.getQuestion().getId();
             Set<Integer> correctSet = correctAnswerIdsByQuestionId.getOrDefault(questionId, Set.of());
-            Set<Integer> selectedSet = selectedAnswerIdsByQuestionId.getOrDefault(examQuestion.getId(), Set.of());
+            Set<Integer> selectedSet = selectedAnswerIdsByVarQuestion.getOrDefault(vq.getId(), Set.of());
             if (correctSet.equals(selectedSet)) {
                 totalCorrect++;
             }
@@ -142,9 +140,9 @@ public class GradingService {
                 .build();
     }
 
-    private Map<Integer, Set<Integer>> loadCorrectAnswerIdsByQuestion(List<ExamQuestion> examQuestions) {
-        List<Integer> questionIds = examQuestions.stream()
-                .map(eq -> eq.getQuestion().getId())
+    private Map<Integer, Set<Integer>> loadCorrectAnswerIdsByQuestion(List<ExamVariantQuestion> variantQuestions) {
+        List<Integer> questionIds = variantQuestions.stream()
+                .map(vq -> vq.getQuestion().getId())
                 .distinct()
                 .toList();
 
@@ -160,16 +158,16 @@ public class GradingService {
         return correctByQuestion;
     }
 
-    private Map<Integer, Set<Integer>> loadSelectedAnswerIdsByQuestion(Integer examSessionId) {
-        List<UserAnswer> userAnswers = userAnswerRepository.findByExamQuestionExamSessionId(examSessionId);
-        Map<Integer, Set<Integer>> selectedByExamQuestion = new HashMap<>();
+    private Map<Integer, Set<Integer>> loadSelectedAnswerIdsByVarQuestion(Integer examSessionId) {
+        List<UserAnswer> userAnswers = userAnswerRepository.findByExamSessionId(examSessionId);
+        Map<Integer, Set<Integer>> selectedByVarQuestion = new HashMap<>();
         for (UserAnswer userAnswer : userAnswers) {
             Set<Integer> selectedIds = userAnswer.getSelectedAnswers().stream()
                     .map(selection -> selection.getSelectedAnswer().getId())
                     .collect(Collectors.toSet());
-            selectedByExamQuestion.put(userAnswer.getExamQuestion().getId(), selectedIds);
+            selectedByVarQuestion.put(userAnswer.getVariantQuestion().getId(), selectedIds);
         }
-        return selectedByExamQuestion;
+        return selectedByVarQuestion;
     }
 
     private ResultResponseDTO toResultResponseDTO(Result result, Integer totalQuestions, Integer rank) {
@@ -203,33 +201,20 @@ public class GradingService {
     }
 
     private ExamResultsResponseDTO.ScoreDistributionDTO buildDistribution(List<Result> results) {
-        int from0To2 = 0;
-        int from2To4 = 0;
-        int from4To6 = 0;
-        int from6To8 = 0;
-        int from8To10 = 0;
+        int from0To2 = 0, from2To4 = 0, from4To6 = 0, from6To8 = 0, from8To10 = 0;
 
         for (Result result : results) {
             float score = result.getScore() == null ? 0.0f : result.getScore();
-            if (score < 2.0f) {
-                from0To2++;
-            } else if (score < 4.0f) {
-                from2To4++;
-            } else if (score < 6.0f) {
-                from4To6++;
-            } else if (score < 8.0f) {
-                from6To8++;
-            } else {
-                from8To10++;
-            }
+            if (score < 2.0f) from0To2++;
+            else if (score < 4.0f) from2To4++;
+            else if (score < 6.0f) from4To6++;
+            else if (score < 8.0f) from6To8++;
+            else from8To10++;
         }
 
         return ExamResultsResponseDTO.ScoreDistributionDTO.builder()
-                .from0To2(from0To2)
-                .from2To4(from2To4)
-                .from4To6(from4To6)
-                .from6To8(from6To8)
-                .from8To10(from8To10)
+                .from0To2(from0To2).from2To4(from2To4).from4To6(from4To6)
+                .from6To8(from6To8).from8To10(from8To10)
                 .build();
     }
 }

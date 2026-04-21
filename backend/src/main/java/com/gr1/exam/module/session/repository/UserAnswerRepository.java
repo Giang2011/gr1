@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface UserAnswerRepository extends JpaRepository<UserAnswer, Integer> {
-    List<UserAnswer> findByExamQuestionExamSessionId(Integer examSessionId);
+    List<UserAnswer> findByExamSessionId(Integer examSessionId);
 
-    Optional<UserAnswer> findByExamQuestionId(Integer examQuestionId);
+    Optional<UserAnswer> findByVariantQuestionId(Integer variantQuestionId);
 }
