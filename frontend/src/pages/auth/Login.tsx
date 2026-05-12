@@ -5,7 +5,7 @@ import { authApi } from '../../api/authApi';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ name: '', password: '' });
+  const [formData, setFormData] = useState({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,6 +20,7 @@ const Login: React.FC = () => {
     try {
       const response: any = await authApi.login(formData);
       // axiosClient đã return response.data nên response chính là LoginResponseDTO
+      // v2 DTO: { token: string, role: string, username: string, name: string }
       const token = response?.token;
       if (token) {
         localStorage.setItem('token', token);
@@ -28,15 +29,15 @@ const Login: React.FC = () => {
         if (userRole) {
           localStorage.setItem('role', userRole);
         }
-
-        const userName = response?.user?.name;
+ 
+        const userName = response?.user?.name || response?.user?.username;
         if (userName) {
           localStorage.setItem('name', userName);
         }
 
         // Chuyển hướng đúng role
-        if (userRole === 'ADMIN') {
-          navigate('/admin/users');
+        if (userRole === 'ADMIN' || userRole === 'TEACHER') {
+          navigate('/admin/subjects');
         } else {
           navigate('/student/exams');
         }
@@ -51,60 +52,64 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="animate-in fade-in zoom-in duration-300">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-          Đăng nhập
+    <div className="animate-in fade-in zoom-in duration-500 max-w-sm mx-auto">
+      <div className="text-center mb-10">
+        <div className="premium-gradient w-16 h-16 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-indigo-200 rotate-3">
+          <Lock size={32} className="text-white" />
+        </div>
+        <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
+          Hệ thống Thi
         </h1>
-        <p className="text-slate-500 mt-2 text-sm">Chào mừng trở lại! Vui lòng nhập thông tin.</p>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em]">Chào mừng trở lại!</p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-600 text-sm mb-6 border border-red-100">
+        <div className="mb-6 p-4 rounded-2xl bg-red-50 text-red-600 text-xs font-bold border border-red-100 flex items-center gap-3 animate-in slide-in-from-top-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-red-600"></div>
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">
             Tên đăng nhập
           </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <User size={18} />
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+              <User size={20} />
             </div>
             <input
               type="text"
-              name="name"
-              value={formData.name}
+              name="username"
+              value={formData.username}
               onChange={handleChange}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-sm"
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none text-[15px] font-medium"
               placeholder="Nhập tên đăng nhập"
               required
             />
           </div>
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">
               Mật khẩu
             </label>
-            <a href="#" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium transition-colors">
+            <a href="#" className="text-[10px] text-indigo-600 hover:text-indigo-700 font-black uppercase tracking-widest transition-colors">
               Quên mật khẩu?
             </a>
           </div>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Lock size={18} />
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+              <Lock size={20} />
             </div>
             <input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-sm"
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none text-[15px] font-medium"
               placeholder="••••••••"
               required
             />
@@ -114,17 +119,29 @@ const Login: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-medium shadow-md shadow-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full py-4 px-6 premium-gradient text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-200 hover:shadow-indigo-300 hover:scale-[1.02] active:scale-[0.98] focus:ring-4 focus:ring-indigo-500/20 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed group"
         >
-          {loading ? <Loader2 size={20} className="animate-spin" /> : 'Đăng nhập'}
+          {loading ? (
+            <Loader2 size={24} className="animate-spin" />
+          ) : (
+            <>
+              Đăng nhập
+              <div className="ml-2 group-hover:translate-x-1 transition-transform">→</div>
+            </>
+          )}
         </button>
       </form>
 
-      <div className="mt-8 text-center text-sm text-slate-500">
-        Chưa có tài khoản?{' '}
-        <Link to="/auth/register" className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors">
-          Đăng ký ngay
-        </Link>
+      <div className="mt-12 text-center">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Support Contact</p>
+        <div className="flex justify-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer">
+            FB
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-pointer">
+            EM
+          </div>
+        </div>
       </div>
     </div>
   );

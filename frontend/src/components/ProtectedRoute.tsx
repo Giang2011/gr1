@@ -15,8 +15,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
 
   if (allowedRoles && role && !allowedRoles.includes(role)) {
     // Nếu có role nhưng không được phép truy cập route này
-    if (role === 'ADMIN') {
-      return <Navigate to="/admin/users" replace />;
+    if (role === 'ADMIN' || role === 'TEACHER') {
+      return <Navigate to="/admin/subjects" replace />;
     }
     return <Navigate to="/student/exams" replace />;
   }

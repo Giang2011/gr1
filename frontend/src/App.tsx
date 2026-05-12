@@ -5,7 +5,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import StudentLayout from './layouts/StudentLayout';
 import AuthLayout from './layouts/AuthLayout';
 import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
 
 // Student Pages
 import ExamList from './pages/student/ExamList';
@@ -22,13 +21,7 @@ import QuestionManagement from './pages/admin/QuestionManagement';
 import ExamManagement from './pages/admin/ExamManagement';
 import ParticipantManagement from './pages/admin/ParticipantManagement';
 import ExamReports from './pages/admin/ExamReports';
-
-const Profile = () => (
-  <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-    <h2 className="text-2xl font-bold text-slate-800">Trang Hồ sơ</h2>
-    <p className="text-slate-500 mt-2">Tính năng đang được phát triển.</p>
-  </div>
-);
+import Profile from './pages/admin/Profile';
 
 const RootRedirect = () => {
   const token = localStorage.getItem('token');
@@ -38,8 +31,8 @@ const RootRedirect = () => {
     return <Navigate to="/auth/login" replace />;
   }
 
-  if (role === 'ADMIN') {
-    return <Navigate to="/admin/users" replace />;
+  if (role === 'ADMIN' || role === 'TEACHER') {
+    return <Navigate to="/admin/subjects" replace />;
   }
 
   return <Navigate to="/student/exams" replace />;
@@ -52,7 +45,6 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/auth" element={<AuthLayout />}>
           <Route path="login" element={<Login />} />
-          <Route path="register" element={<Register />} />
         </Route>
 
         <Route path="/" element={<RootRedirect />} />
@@ -72,7 +64,7 @@ const App: React.FC = () => {
         </Route>
 
         {/* Admin Layout Routes */}
-        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'TEACHER']} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route path="users" element={<UserManagement />} />
             <Route path="subjects" element={<SubjectManagement />} />
@@ -80,6 +72,7 @@ const App: React.FC = () => {
             <Route path="exams" element={<ExamManagement />} />
             <Route path="exams/:id/participants" element={<ParticipantManagement />} />
             <Route path="reports" element={<ExamReports />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
         </Route>
       </Routes>

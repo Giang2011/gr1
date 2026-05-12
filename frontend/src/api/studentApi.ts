@@ -29,12 +29,14 @@ export interface ShuffledAnswerDTO {
   examAnswerId: number;
   orderIndex: number;
   content: string;
+  imageUrl?: string;
 }
 
 export interface ExamQuestionResponseDTO {
   examQuestionId: number;
   orderIndex: number;
   content: string;
+  imageUrl?: string;
   isMultipleChoice?: boolean;
   answers: ShuffledAnswerDTO[];
 }
@@ -69,20 +71,23 @@ export const studentApi = {
 
   // Sessions
   startSession: (examId: number): Promise<ExamSessionResponseDTO> => {
-    return axiosClient.post(`/v1/api/sessions/start/${examId}`);
+    return axiosClient.post(`/v1/sessions/start/${examId}`);
+  },
+  getSessionById: (sessionId: number): Promise<ExamSessionResponseDTO> => {
+    return axiosClient.get(`/v1/sessions/${sessionId}`);
   },
   getSessionQuestions: (sessionId: number): Promise<ExamQuestionResponseDTO[]> => {
-    return axiosClient.get(`/v1/api/sessions/${sessionId}/questions`);
+    return axiosClient.get(`/v1/sessions/${sessionId}/questions`);
   },
   submitSession: (sessionId: number, data: SubmitSessionRequestDTO): Promise<ExamSessionResponseDTO> => {
-    return axiosClient.post(`/v1/api/sessions/${sessionId}/submit`, data);
+    return axiosClient.post(`/v1/sessions/${sessionId}/submit`, data);
   },
 
   // Results
   getMyResults: (): Promise<ResultResponseDTO[]> => {
-    return axiosClient.get('/v1/api/results/me');
+    return axiosClient.get('/v1/results/me');
   },
   getResultBySession: (sessionId: number): Promise<ResultResponseDTO> => {
-    return axiosClient.get(`/v1/api/results/session/${sessionId}`);
+    return axiosClient.get(`/v1/results/session/${sessionId}`);
   }
 };
